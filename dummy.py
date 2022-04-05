@@ -4,6 +4,7 @@ from unicodedata import category, name
 import requests
 import json
 from datetime import datetime
+import math
 
 
 protocols_url = "https://api.llama.fi/protocols"
@@ -22,11 +23,15 @@ for data in datas:
         }
         ethProtocols.append(ethProtocol)
 
+# ethProtocol = {
+#     "name": "yam-finance",
+#     "category": "synthetics"
+# }
+ethProtocols.append(ethProtocol)
 
 protocol_datas =  []
-
 i = 0
-while i < 250:
+while i < 150:
     if " " in ethProtocols[i]["name"]:
         split_name = ethProtocols[i]["name"].split(" ")
         join_name = "-".join([split_name[0], split_name[1]])
@@ -56,14 +61,15 @@ while i < 250:
         if date[8] == '0' and date[9] == '1' and date[2] == "2":
             HashyMcHasherson = {
                 "date": date,
-                "tvlUSD": hash["totalLiquidityUSD"]
+                "name": ethProtocols[i]["name"],
+                "category": ethProtocols[i]["category"],
+                "tvlUSD": math.floor(hash["totalLiquidityUSD"])
             }
-            FirstOfMonth.append(HashyMcHasherson)
+            protocol_datas.append(HashyMcHasherson)
 
-    object["ethTvlHistory"] = FirstOfMonth
+    
         
 
-    protocol_datas.append(object)
     # breaks
     i += 1
 
@@ -72,6 +78,8 @@ while i < 250:
 #         epochtime = hash["date"]
 #         datetime = datetime.fromtimestamp(epochtime)
 #         protocol_datas[protocol][hash]["date"] = datetime
+
+
 
 with open('data.json', 'w') as f:
     json.dump(protocol_datas, f, indent=4, default=str)
