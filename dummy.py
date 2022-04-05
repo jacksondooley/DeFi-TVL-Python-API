@@ -1,18 +1,15 @@
 from calendar import EPOCH, month
 from posixpath import split
-from unicodedata import name
+from unicodedata import category, name
 import requests
 import json
 from datetime import datetime
 
 
 protocols_url = "https://api.llama.fi/protocols"
-
 protocol_url = "https://api.llama.fi/protocol/"
 
 response = requests.get(protocols_url)
-
-
 datas = response.json()
 
 ethProtocols = []
@@ -20,7 +17,8 @@ ethProtocols = []
 for data in datas:
     if "Ethereum" in data["chains"]:
         ethProtocol = {
-            "name": data["name"]
+            "name": data["name"],
+            "category": data["category"]
         }
         ethProtocols.append(ethProtocol)
 
@@ -28,7 +26,7 @@ for data in datas:
 protocol_datas =  []
 
 i = 0
-while i < 100:
+while i < 250:
     if " " in ethProtocols[i]["name"]:
         split_name = ethProtocols[i]["name"].split(" ")
         join_name = "-".join([split_name[0], split_name[1]])
@@ -37,7 +35,7 @@ while i < 100:
         name = ethProtocols[i]["name"]
 
     print(name)
-    if name == "xdai-stake" or name == "the-tokenized":
+    if name == "xdai-stake" or name == "the-tokenized" or name == "perpetual-protocol" or name == "gnosis-protocol":
         i += 1
         continue
 
@@ -45,6 +43,7 @@ while i < 100:
     temp_data = protocol_response.json()
     object = {
         "name": name,
+        "category": ethProtocols[i]["category"],
         "ethTvlHistory": temp_data["chainTvls"]["Ethereum"]["tvl"]
     }
 
@@ -52,11 +51,11 @@ while i < 100:
     for hash in object["ethTvlHistory"]:
         epochtime = hash["date"]
         datetime = datetime.fromtimestamp(epochtime)
-        date = datetime.strftime("%d-%b-%Y")
+        date = datetime.strftime("%Y-%m-%d")
         
-        if date[0] == '0' and date[1] == '1':
+        if date[8] == '0' and date[9] == '1' and date[2] == "2":
             HashyMcHasherson = {
-                "date": datetime,
+                "date": date,
                 "tvlUSD": hash["totalLiquidityUSD"]
             }
             FirstOfMonth.append(HashyMcHasherson)
