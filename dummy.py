@@ -2,85 +2,128 @@ from calendar import EPOCH, month
 from posixpath import split
 from unicodedata import category, name
 import requests
+import asyncio
+import aiohttp
 import json
 from datetime import datetime
 import math
 
 
-protocols_url = "https://api.llama.fi/protocols"
-protocol_url = "https://api.llama.fi/protocol/"
+PROTOCOLS_URL = "https://api.llama.fi/protocols"
+PROTOCOL_URL = "https://api.llama.fi/protocol/"
 
-response = requests.get(protocols_url)
-datas = response.json()
+def get_eth_protocols():
 
-ethProtocols = []
+    response = requests.get(PROTOCOLS_URL)
+    datas = response.json()
 
-for data in datas:
-    if "Ethereum" in data["chains"]:
-        ethProtocol = {
-            "name": data["name"],
-            "category": data["category"]
-        }
-        ethProtocols.append(ethProtocol)
+    eth_protocols = []
 
-# ethProtocol = {
-#     "name": "yam-finance",
-#     "category": "synthetics"
-# }
-ethProtocols.append(ethProtocol)
-
-protocol_datas =  []
-i = 0
-while i < 150:
-    if " " in ethProtocols[i]["name"]:
-        split_name = ethProtocols[i]["name"].split(" ")
-        join_name = "-".join([split_name[0], split_name[1]])
-        name = join_name.lower()
-    else:
-        name = ethProtocols[i]["name"]
-
-    print(name)
-    if name == "xdai-stake" or name == "the-tokenized" or name == "perpetual-protocol" or name == "gnosis-protocol":
-        i += 1
-        continue
-
-    protocol_response = requests.get(protocol_url + name)
-    temp_data = protocol_response.json()
-    object = {
-        "name": name,
-        "category": ethProtocols[i]["category"],
-        "ethTvlHistory": temp_data["chainTvls"]["Ethereum"]["tvl"]
-    }
-
-    FirstOfMonth = []
-    for hash in object["ethTvlHistory"]:
-        epochtime = hash["date"]
-        datetime = datetime.fromtimestamp(epochtime)
-        date = datetime.strftime("%Y-%m-%d")
-        
-        if date[8] == '0' and date[9] == '1' and date[2] == "2":
-            HashyMcHasherson = {
-                "date": date,
-                "name": ethProtocols[i]["name"],
-                "category": ethProtocols[i]["category"],
-                "tvlUSD": math.floor(hash["totalLiquidityUSD"])
+    for data in datas:
+        if "Ethereum" in data["chains"] and data["category"] != "CEX":
+            ethProtocol = {
+                "name": data["name"],
+                "category": data["category"]
             }
-            protocol_datas.append(HashyMcHasherson)
+            eth_protocols.append(ethProtocol)
 
-    
+    return eth_protocols
+
+
+async def iterate_protocols(protocols):
+    protocol_datas =  []
+    tasks = []
+    async with aiohttp.ClientSession() as session:
+        for protocol in protocols[1:250]:
+            if " " in protocol["name"]:
+                split_name = protocol["name"].split(" ")
+                join_name = "-".join([split_name[0], split_name[1]])
+                name = join_name.lower()
+            else:
+                name = protocol["name"]
+
+            if name == "xdai-stake" or name == "the-tokenized" or name == "perpetual-protocol" or name == "gnosis-protocol":
+                continue
+
+            try:
+                task = asyncio.create_task(async_fetch_protocol_history(session, name, protocol))
+                tasks.append(task)
+            except Exception as err:
+                print(f"async error {err}")
+            # protocol_data = fetch_protocol_history(name, protocol)
+            # protocol_datas.append(protocol_data)
+
+
+        protocol_datas = await asyncio.gather(*tasks)
         
+    return protocol_datas
+    
+def fetch_protocol_history(protocol_name, protocol):
+    protocol_response = requests.get(PROTOCOL_URL+ protocol_name)
+    temp_data = protocol_response.json()
+    protocol_data = []
+    try:
+        object = {
+            "name": protocol_name,
+            "category": protocol["category"],
+            "ethTvlHistory": temp_data["chainTvls"]["Ethereum"]["tvl"]
+        }
+        for hash in object["ethTvlHistory"]:
+            epochtime = hash["date"]
+            datetim = datetime.fromtimestamp(epochtime)
+            date = datetim.strftime("%Y-%m-%d")
+            
+            if date[8] == '0' and date[9] == '1' and date[2] == "2":
+                HashyMcHasherson = {
+                    "date": date,
+                    "name": protocol["name"],
+                    "category": protocol["category"],
+                    "tvlUSD": math.floor(hash["totalLiquidityUSD"])
+                }
+                protocol_data.append(HashyMcHasherson)
+    except:
+        print("------")
+        print(protocol_name)
+        # print(temp_data)
+        print("-------")
 
-    # breaks
-    i += 1
+    return {protocol_name: protocol_data}
 
-# for protocol in protocol_datas:
-#     for hash in protocol["ethTvlHistory"]:
-#         epochtime = hash["date"]
-#         datetime = datetime.fromtimestamp(epochtime)
-#         protocol_datas[protocol][hash]["date"] = datetime
+async def async_fetch_protocol_history(session, protocol_name, protocol):
 
+    async with session.get(PROTOCOL_URL + protocol_name) as protocol_response:
+        temp_data = await protocol_response.json()
+        protocol_data = []
+        try:
+            object = {
+                "name": protocol_name,
+                "category": protocol["category"],
+                "ethTvlHistory": temp_data["chainTvls"]["Ethereum"]["tvl"]
+            }
+            for hash in object["ethTvlHistory"]:
+                epochtime = hash["date"]
+                datetim = datetime.fromtimestamp(epochtime)
+                date = datetim.strftime("%Y-%m-%d")
+                
+                if date[8] == '0' and date[9] == '1' and date[2] == "2":
+                    HashyMcHasherson = {
+                        "date": date,
+                        "name": protocol["name"],
+                        "category": protocol["category"],
+                        "tvlUSD": math.floor(hash["totalLiquidityUSD"])
+                    }
+                    protocol_data.append(HashyMcHasherson)
+        except:
+            print("------")
+            print(protocol_name)
+            # print(temp_data)
+            print("-------")
 
+    return {protocol_name: protocol_data}
 
-with open('data.json', 'w') as f:
+eth_protocols = get_eth_protocols()
+protocol_datas = asyncio.run(iterate_protocols(eth_protocols))
+
+with open('data2.json', 'w') as f:
     json.dump(protocol_datas, f, indent=4, default=str)
 
